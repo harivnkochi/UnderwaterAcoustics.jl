@@ -75,8 +75,40 @@ SampledSSP(depth, c) = SampledSSP(depth, c, :linear)
 
 soundspeed(ssp::SampledSSP, x, y, z) = ssp.f(-z)
 
-function Base.show(io::IO, ssp::SampledSSP{T1,T2,T3}) where {T1,T2,T3}
-  print(io, "SampledSSP{", T1, ",", T2, ",", ssp.interp, "}(", length(ssp.z), " points)")
+struct SampledSSPRangeDependent{T1,T2,T3,T4} <: SoundSpeedProfile
+  z::Vector{T1}
+  x::Vector{T2}
+  c::Vector{T3}
+  interp::Symbol
+  f::T4
+  function SampledSSPRangeDependent(depth, x, c, interp)
+    if interp === :smooth
+      depth isa AbstractRange || throw(ArgumentError("depth must be sampled uniformly and specified as an AbstractRange"))
+      x isa AbstractRange || throw(ArgumentError("x range must be sampled uniformly and specified as an AbstractRange"))
+      f = CubicSplineInterpolation((depth,x), c; extrapolation_bc=Line())
+    elseif interp === :linear
+      f = LinearInterpolation((depth,x), c; extrapolation_bc=Line())
+    else
+      throw(ArgumentError("Unknown interpolation"))
+    end
+    new{eltype(depth),eltype(x),eltype(c),typeof(f)}(-depth,x, c, interp, f)
+  end
+end
+
+"""
+  SampledSSPRangeDependent(depth, x, c)
+  SampledSSPRangeDependent(depth, x, c, interp)
+
+Create a sound speed profile based on measurements at discrete depths.
+`interp` may be either `:linear` or `:smooth`, and defaults to `:linear`
+if unspecified.
+"""
+SampledSSPRangeDependent(depth, x, c) = SampledSSPRangeDependent(depth, x, c, :linear)
+
+soundspeed(ssp::SampledSSPRangeDependent, x, y, z) = ssp.f((-z,x))
+
+function Base.show(io::IO, ssp::SampledSSPRangeDependent{T1,T2,T3,T4}) where {T1,T2,T3,T4}
+  print(io, "SampledSSPRangeDependent{", T1, ",", T2, ",", T3, ",", ssp.interp, "}(", length(ssp.z), " points)")
 end
 
 ### bathymetry models
